@@ -1,0 +1,14 @@
+node_modules
+*.log
+.idea
+.DS_Store
+artifacts
+.history
+public/
+.env.development
+.env.staging
+.env.production
+.env.review
+
+dist/
+
