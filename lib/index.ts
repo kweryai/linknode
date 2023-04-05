@@ -18,11 +18,32 @@ interface Execute<I,O> {
 }
 
 export class Chain<G = any> extends EventEmitter {
-  constructor(public readonly context: G) {
+  constructor(public readonly context: G, private readonly nodes: ChainNode<any, any>[] = []) {
     super();
 
     log('setting up chain');
   }
+
+  public addNode<I, O>(node: ChainNode<I, O>) {
+    this.nodes.push(node);
+  }
+
+  public start() {
+    log('starting chain');
+    
+    this.nodes.forEach((node, index) => {
+      node.start();
+    });
+  }
+
+  public stop() {
+    log('stopping chain');
+
+    this.nodes.forEach((node, index) => {
+      node.stop();
+    });
+  }
+
 }
 
 export interface ChainNodeArgs<I, O = any> {
@@ -66,7 +87,19 @@ export class ChainNode<I, O = any> {
         this.chain.emit('error', err);
       }
     });
+
+    this.chain.addNode(this);
   }
+
+  /**
+   * Override this method to implement a "start" event or timer 
+   */
+  async start() {}
+
+  /**
+   * Override this method to implement a "stop" event or timer
+   */ 
+  async stop() {}
 
   async addTransition<I = any, T = any>(transition: Transition<I, T>) {
     if (!this.transitions) {
@@ -103,13 +136,22 @@ export class ChainNode<I, O = any> {
 
 // A Timer node that fires a `tick` event every second
 export class TimerNode extends ChainNode<void, number> {
+  private interval: NodeJS.Timeout | undefined;
   constructor(args: ChainNodeArgs<void, number>) {
     super(args);
+  }
 
+  async start(): Promise<void> {
     let counter = 0;
-    setInterval(() => {
+    this.interval = setInterval(() => {
       this.chain.emit('tick', counter++);
     }, 1000);
+  }
+
+  async stop(): Promise<void> {
+    if (this.interval) {
+      clearInterval(this.interval);
+    }
   }
 }
 
