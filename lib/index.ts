@@ -1,7 +1,8 @@
 
 import EventEmitter from "events";
 import debug from "debug";
-
+import fetch from "node-fetch";
+import type { Request, Response } from "node-fetch";
 const log = debug("linknode");
 export interface Transformer<I,T, G> {
   transform: (data: I, context?: G) => Promise<T>;
@@ -18,6 +19,8 @@ interface Execute<I,O> {
 }
 
 export class Chain<G = any> extends EventEmitter {
+  protected isError: boolean = false;
+
   constructor(public readonly context: G, private readonly nodes: ChainNode<any, any>[] = []) {
     super();
 
@@ -44,6 +47,27 @@ export class Chain<G = any> extends EventEmitter {
     });
   }
 
+  async dispatch(event: string, ...args: any[]) {
+    if (event === 'error') {
+      this.isError = true;
+    }
+
+    if (!this.isError) {
+      this.emit(event, ...args);
+    }
+  }
+
+  public getTransitionsMap() {
+    let map = new Map<string, string>();
+
+    this.nodes.forEach((node) => {
+      node.getTransitionMap().forEach((value, key) => {
+        map.set(key, value);
+      });
+    });
+
+    return map;
+  }
 }
 
 export interface ChainNodeArgs<I, O = any> {
@@ -56,6 +80,10 @@ export interface ChainNodeArgs<I, O = any> {
   execute?: Execute<I,O>;
   /** optional initial transitions to add to this node */
   transitions?: Transition[];
+
+  name?: string;
+
+  description?: string;
 }
 
 export class ChainNode<I, O = any> {
@@ -63,18 +91,44 @@ export class ChainNode<I, O = any> {
   protected execute?: Execute<I,O>;
   protected chain: Chain;
   public readonly event: string;
-  protected transitions?: Transition[];
+  // protected transitions?: Transition[];
   protected transformed?: I | O;
+
+  protected _transitions?: Transition[];
+
+  public description: string;
+  public name: string;
+
+  public getTransitionMap() {
+    const map = new Map<string, string>();
+
+    if (this._transitions) {
+      this._transitions.forEach((transition) => {
+        map.set(this.event, transition.event);
+      });
+    }
+
+    return map;
+  }
   
   constructor(
     args: ChainNodeArgs<I, O>
     ) {
-    const { chain, event, execute, transitions } = args;
+    const { 
+      chain, 
+      event, 
+      execute, 
+      transitions,
+      name,
+      description
+    } = args;
 
     this.chain = chain;
     this.event = event;
     this.execute = execute;
-    this.transitions = transitions;
+    this._transitions = transitions;
+    this.name = name || event;
+    this.description = description || '';
 
     this.chain.on(event, async (data: I) => {
       try {
@@ -84,7 +138,7 @@ export class ChainNode<I, O = any> {
         await this.resolve(this.transformed);
       } catch(err) {
         // just emit error 
-        this.chain.emit('error', err);
+        this.chain.dispatch('error', err);
       }
     });
 
@@ -102,11 +156,11 @@ export class ChainNode<I, O = any> {
   async stop() {}
 
   async addTransition<I = any, T = any>(transition: Transition<I, T>) {
-    if (!this.transitions) {
-      this.transitions = [];
+    if (!this._transitions) {
+      this._transitions = [];
     }
 
-    this.transitions.push(transition);
+    this._transitions.push(transition);
   }
 
   /**
@@ -122,12 +176,23 @@ export class ChainNode<I, O = any> {
     
     // go through every transition and check if the condition is met
     // if it is, then emit the event and transform the data
-    if (this.transitions) {
-      for (const transition of this.transitions) {
-        if (await transition.condition(data, this.chain.context)) {
+    if (this._transitions) {
+      for (const transition of this._transitions) {
+        let willTransition = false;
+        try {
+          willTransition = await transition.condition(data, this.chain.context);
+        } catch(err) {
+          this.chain.dispatch('error', err);
+        }
+
+        if (willTransition) {
           log("Transitioning to %s", transition.event);
-          const transformed = await transition.transformer.transform(data, this.chain.context);
-          this.chain.emit(transition.event, transformed);
+          try {
+            const transformed = await transition.transformer.transform(data, this.chain.context);
+            this.chain.dispatch(transition.event, transformed);
+          } catch(err) {
+            this.chain.dispatch('error', err);
+          }
         }
       }
     }
@@ -144,7 +209,7 @@ export class TimerNode extends ChainNode<void, number> {
   async start(): Promise<void> {
     let counter = 0;
     this.interval = setInterval(() => {
-      this.chain.emit('tick', counter++);
+      this.chain.dispatch('tick', counter++);
     }, 1000);
   }
 
@@ -178,13 +243,22 @@ export class TimeoutNode extends ChainNode<number, number> {
       if (secondsPassed >= timeoutSeconds && !this.fired) {
         log("TimeoutNode: Timeout reached after %d seconds", secondsPassed);
         this.fired = true;
-        this.chain.emit(args.event, secondsPassed);
+        this.chain.dispatch(args.event, secondsPassed);
       }
     });
   }
 }
+export class HttpNode extends ChainNode<Request, Response> {
+  async resolve(request: Request) {
+    log('Resolving %s', this.event);
 
+    const { url, ...rest } = request;
 
-
-
-
+    try {
+      const response = await fetch(url, rest);
+      super.resolve(response);
+    } catch(err) {
+      this.chain.dispatch('error', err);
+    }
+  }
+}
