@@ -1,11 +1,10 @@
 {
   "name": "@cellis/linknode",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "license": "MIT",
   "dependencies": {
     "@types/debug": "^4.1.7",
     "debug": "^4.3.4",
-    "node-fetch": "^2",
     "typescript": "^5.0.2"
   },
   "main": "dist/index.js",
@@ -21,5 +20,8 @@
     "@types/node-fetch": "^2",
     "@types/prop-types": "^15.7.5",
     "ts-node": "^10.9.1"
+  },
+  "peerDependencies": {
+    "node-fetch": "^2"
   }
 }
