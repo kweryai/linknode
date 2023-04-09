@@ -70,9 +70,9 @@ export class Chain<G = any> extends EventEmitter {
   }
 }
 
-export interface ChainNodeArgs<I, O = any> {
+export interface ChainNodeArgs<I, O = any, G = any> {
   /** The chain this node belongs to */
-  chain: Chain;
+  chain: Chain<G>;
   /** The name of this node */
   event: string;
   /** the function that will be called when the node is executed.
@@ -86,10 +86,10 @@ export interface ChainNodeArgs<I, O = any> {
   description?: string;
 }
 
-export class ChainNode<I, O = any> {
+export class ChainNode<I, O = any, G = any> {
   
   protected execute?: Execute<I,O>;
-  protected chain: Chain;
+  protected chain: Chain<G>;
   public readonly event: string;
   // protected transitions?: Transition[];
   protected transformed?: I | O;
