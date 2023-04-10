@@ -14,8 +14,8 @@ export interface Transition<I = any, T = any, G = any> {
   transformer: Transformer<I,T,G>;
 }
 
-interface Execute<I,O> {
-  (prev: I | O | undefined, data: I, context?: any): Promise<O> | O;
+interface Execute<I,O, G> {
+  (prev: I | O | undefined, data: I, context?: G): Promise<O> | O;
 }
 
 export class Chain<G = any> extends EventEmitter {
@@ -77,7 +77,7 @@ export interface ChainNodeArgs<I, O = any, G = any> {
   event: string;
   /** the function that will be called when the node is executed.
    * this function should return a promise that resolves to the data that will be passed to the `resolve` method. */
-  execute?: Execute<I,O>;
+  execute?: Execute<I,O, G>;
   /** optional initial transitions to add to this node */
   transitions?: Transition[];
 
@@ -88,7 +88,7 @@ export interface ChainNodeArgs<I, O = any, G = any> {
 
 export class ChainNode<I, O = any, G = any> {
   
-  protected execute?: Execute<I,O>;
+  protected execute?: Execute<I,O, G>;
   protected chain: Chain<G>;
   public readonly event: string;
   // protected transitions?: Transition[];
