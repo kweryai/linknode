@@ -48,8 +48,9 @@ export class Chain<G = any> extends EventEmitter {
   }
 
   async dispatch(event: string, ...args: any[]) {
-    if (event === 'error') {
+    if (event === 'error' && !this.isError) {
       this.isError = true;
+      this.emit(event, ...args);
     }
 
     if (!this.isError) {
