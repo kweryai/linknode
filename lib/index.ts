@@ -20,8 +20,9 @@ interface Execute<I,O, G> {
 
 export class Chain<G = any> extends EventEmitter {
   protected isError: boolean = false;
+  private isComplete: boolean = false;
 
-  constructor(public readonly context: G, private readonly nodes: ChainNode<any, any>[] = []) {
+  constructor(public readonly context: G, private readonly nodes: ChainNode<any, any>[] = [], public readonly terminalEvent: string = 'terminal') {
     super();
 
     log('setting up chain');
@@ -48,12 +49,20 @@ export class Chain<G = any> extends EventEmitter {
   }
 
   async dispatch(event: string, ...args: any[]) {
+    if (this.isComplete) {
+      return;
+    }
+
     if (event === 'error' && !this.isError) {
       this.isError = true;
       this.emit(event, ...args);
-    }
+    } 
 
-    if (!this.isError) {
+    if (event === this.terminalEvent || !this.isError) {
+      if (this.terminalEvent === event) {
+        this.isComplete = true;
+      }
+
       this.emit(event, ...args);
     }
   }
